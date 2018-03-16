@@ -16,6 +16,9 @@
         },
         "adminPublicKey": {
             "value": ""
+        },
+        "copies": {
+            "value": 3
         }
     }
 }

@@ -17,17 +17,114 @@
         "adminPublicKey": {
             "type": "string",
             "minLength": 1
+        },
+        "copies": {
+            "type": "int"
         }
     },
     "variables": {},
     "resources": [
         {
-            "name": "vm",
+            "name": "vnet",
+            "type": "Microsoft.Network/virtualNetworks",
+            "apiVersion": "2017-08-01",
+            "location": "[parameters('location')]",
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "10.0.0.0/24"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "subnet",
+                        "properties": {
+                            "addressPrefix": "10.0.0.0/24"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "nsg",
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2017-06-01",
+            "location": "[parameters('location')]",
+            "properties": {
+                "securityRules": [
+                    {
+                        "name": "default-allow-ssh",
+                        "properties": {
+                            "priority": 1000,
+                            "protocol": "Tcp",
+                            "access": "Allow",
+                            "direction": "Inbound",
+                            "sourceAddressPrefix": "*",
+                            "sourcePortRange": "*",
+                            "destinationAddressPrefix": "*",
+                            "destinationPortRange": "22"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[concat('pip', copyIndex())]",
+            "type": "Microsoft.Network/publicIPAddresses",
+            "apiVersion": "2017-08-01",
+            "location": "[parameters('location')]",
+            "properties": {
+                "publicIPAllocationMethod": "Static"
+            },
+            "sku": {
+                "name": "Basic"
+            },
+            "copy": {
+                "name": "copy",
+                "count": "[parameters('copies')]"
+            }
+        },
+        {
+            "name": "[concat('nic', copyIndex())]",
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2016-09-01",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "Microsoft.Network/virtualNetworks/vnet",
+                "[concat('Microsoft.Network/publicIpAddresses/pip', copyIndex())]",
+                "Microsoft.Network/networkSecurityGroups/nsg"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig",
+                        "properties": {
+                            "subnet": {
+                                "id": "[concat(resourceId('Microsoft.Network/virtualNetworks', 'vnet'), '/subnets/subnet')]"
+                            },
+                            "privateIPAllocationMethod": "Dynamic",
+                            "publicIpAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIpAddresses', concat('pip', copyIndex()))]"
+                            }
+                        }
+                    }
+                ],
+                "networkSecurityGroup": {
+                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg')]"
+                }
+            },
+            "copy": {
+                "name": "copy",
+                "count": "[parameters('copies')]"
+            }
+        },
+        {
+            "name": "[concat('vm', copyIndex())]",
             "type": "Microsoft.Compute/virtualMachines",
             "apiVersion": "2016-04-30-preview",
             "location": "[parameters('location')]",
             "dependsOn": [
-                "Microsoft.Network/networkInterfaces/nic"
+                "[concat('Microsoft.Network/networkInterfaces/nic', copyIndex())]"
             ],
             "properties": {
                 "osProfile": {
@@ -62,103 +159,16 @@
                 "networkProfile": {
                     "networkInterfaces": [
                         {
-                            "id": "[resourceId('Microsoft.Network/networkInterfaces', 'nic')]"
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', concat('nic', copyIndex()))]"
                         }
                     ]
                 }
-            }
-        },
-        {
-            "name": "vnet",
-            "type": "Microsoft.Network/virtualNetworks",
-            "apiVersion": "2017-08-01",
-            "location": "[parameters('location')]",
-            "properties": {
-                "addressSpace": {
-                    "addressPrefixes": [
-                        "10.0.0.0/24"
-                    ]
-                },
-                "subnets": [
-                    {
-                        "name": "subnet",
-                        "properties": {
-                            "addressPrefix": "10.0.0.0/24"
-                        }
-                    }
-                ]
-            }
-        },
-        {
-            "name": "nic",
-            "type": "Microsoft.Network/networkInterfaces",
-            "apiVersion": "2016-09-01",
-            "location": "[parameters('location')]",
-            "dependsOn": [
-                "Microsoft.Network/virtualNetworks/vnet",
-                "Microsoft.Network/publicIpAddresses/pip",
-                "Microsoft.Network/networkSecurityGroups/nsg"
-            ],
-            "properties": {
-                "ipConfigurations": [
-                    {
-                        "name": "ipconfig",
-                        "properties": {
-                            "subnet": {
-                                "id": "[concat(resourceId('Microsoft.Network/virtualNetworks', 'vnet'), '/subnets/subnet')]"
-                            },
-                            "privateIPAllocationMethod": "Dynamic",
-                            "publicIpAddress": {
-                                "id": "[resourceId('Microsoft.Network/publicIpAddresses', 'pip')]"
-                            }
-                        }
-                    }
-                ],
-                "networkSecurityGroup": {
-                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'nsg')]"
-                }
-            }
-        },
-        {
-            "name": "pip",
-            "type": "Microsoft.Network/publicIPAddresses",
-            "apiVersion": "2017-08-01",
-            "location": "[parameters('location')]",
-            "properties": {
-                "publicIPAllocationMethod": "Static"
             },
-            "sku": {
-                "name": "Basic"
-            }
-        },
-        {
-            "name": "nsg",
-            "type": "Microsoft.Network/networkSecurityGroups",
-            "apiVersion": "2017-06-01",
-            "location": "[parameters('location')]",
-            "properties": {
-                "securityRules": [
-                    {
-                        "name": "default-allow-ssh",
-                        "properties": {
-                            "priority": 1000,
-                            "protocol": "Tcp",
-                            "access": "Allow",
-                            "direction": "Inbound",
-                            "sourceAddressPrefix": "*",
-                            "sourcePortRange": "*",
-                            "destinationAddressPrefix": "*",
-                            "destinationPortRange": "22"
-                        }
-                    }
-                ]
+            "copy": {
+                "name": "copy",
+                "count": "[parameters('copies')]"
             }
         }
     ],
-    "outputs": {
-        "ssh": {
-            "type": "string",
-            "value": "[concat('ssh cloud-user@', reference('pip').ipAddress)]"
-        }
-    }
+    "outputs": {}
 }
